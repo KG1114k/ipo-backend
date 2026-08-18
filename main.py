@@ -6,7 +6,6 @@ from bs4 import BeautifulSoup
 
 app = FastAPI()
 
-# Enable CORS so Flutter app can communicate with Railway backend
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -15,7 +14,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Request body structure matching Flutter JSON payload
 class AllotmentRequest(BaseModel):
     pan: str
     ipo_id: str
@@ -24,7 +22,7 @@ class AllotmentRequest(BaseModel):
 def root():
     return {"message": "IPO Tracker Backend is running successfully!"}
 
-# 1. Naya Endpoint: Live Active IPOs fetch karne ke liye
+# --- YE ENDPOINT AAPKE BACKEND MEIN MISSING THA ---
 @app.get("/get-active-ipos")
 def get_active_ipos():
     url = "https://www.chittorgarh.com/report/ipo-allotment-status/57/"
@@ -34,22 +32,18 @@ def get_active_ipos():
         soup = BeautifulSoup(response.content, 'html.parser')
         
         ipo_names = []
-        # Chittorgarh ki table se IPO names extract karna
         for a in soup.select('.table-responsive table tr td:first-child a')[:10]:
             name = a.text.strip()
             if name and name not in ipo_names:
                 ipo_names.append(name)
         
-        # Agar website se data na mile toh default list bhej do
         if not ipo_names:
             return {"ipos": ["Bagmane Prime Office REIT", "Bajaj Housing Finance", "Hyundai Motor India"]}
              
         return {"ipos": ipo_names}
     except Exception as e:
-        # Error aane par fallback list return karega taaki app crash na ho
         return {"ipos": ["Bagmane Prime Office REIT", "Bajaj Housing Finance", "Hyundai Motor India"]}
 
-# 2. Existing Endpoint: Allotment check karne ke liye
 @app.post("/check-allotment")
 async def check_allotment(data: AllotmentRequest):
     pan = data.pan.strip().upper()
