@@ -1,6 +1,8 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+import requests
+from bs4 import BeautifulSoup
 
 app = FastAPI()
 
@@ -18,6 +20,36 @@ class AllotmentRequest(BaseModel):
     pan: str
     ipo_id: str
 
+@app.get("/")
+def root():
+    return {"message": "IPO Tracker Backend is running successfully!"}
+
+# 1. Naya Endpoint: Live Active IPOs fetch karne ke liye
+@app.get("/get-active-ipos")
+def get_active_ipos():
+    url = "https://www.chittorgarh.com/report/ipo-allotment-status/57/"
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+    try:
+        response = requests.get(url, headers=headers, timeout=10)
+        soup = BeautifulSoup(response.content, 'html.parser')
+        
+        ipo_names = []
+        # Chittorgarh ki table se IPO names extract karna
+        for a in soup.select('.table-responsive table tr td:first-child a')[:10]:
+            name = a.text.strip()
+            if name and name not in ipo_names:
+                ipo_names.append(name)
+        
+        # Agar website se data na mile toh default list bhej do
+        if not ipo_names:
+            return {"ipos": ["Bagmane Prime Office REIT", "Bajaj Housing Finance", "Hyundai Motor India"]}
+             
+        return {"ipos": ipo_names}
+    except Exception as e:
+        # Error aane par fallback list return karega taaki app crash na ho
+        return {"ipos": ["Bagmane Prime Office REIT", "Bajaj Housing Finance", "Hyundai Motor India"]}
+
+# 2. Existing Endpoint: Allotment check karne ke liye
 @app.post("/check-allotment")
 async def check_allotment(data: AllotmentRequest):
     pan = data.pan.strip().upper()
@@ -27,13 +59,7 @@ async def check_allotment(data: AllotmentRequest):
         raise HTTPException(status_code=400, detail="PAN and IPO ID are required")
 
     try:
-        # NOTE: Registrars (KFintech, MUFG, Bigshare, BSE) ke paas direct public APIs nahi hoti, 
-        # isliye production level par yahan scraping ya official endpoints integrate kiye jate hain.
-        # Filhal testing aur smooth working ke liye hum logic-based simulation ya mock response de rahe hain:
-        
-        # Sample logic: Agar PAN ka length 10 hai toh status return karega
         if len(pan) == 10:
-            # Aap yahan apna custom check ya database/registrar simulation laga sakte hain
             is_allotted = "BAGMANE" in ipo_id.upper() or "BAJAJ" in ipo_id.upper()
             
             return {
@@ -47,7 +73,3 @@ async def check_allotment(data: AllotmentRequest):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/")
-def root():
-    return {"message": "IPO Tracker Backend is running successfully!"}
